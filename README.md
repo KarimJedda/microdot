@@ -18,7 +18,7 @@ without trusting a centralised RPC provider, and without shipping smoldot.
 
 | Crate              | Purpose                                                                   |
 |--------------------|---------------------------------------------------------------------------|
-| `microdot-core`    | One-shot Kademlia client + persistable peer pool + discovery orchestrator. Generic over `Connect`, `Storage`, `Clock` traits. Depends on [`polkadot-p2p-connect`](https://github.com/paritytech/polkadot-p2p-connect) for the per-peer connection lifecycle (noise + yamux + multistream-select + substrate request-response). |
+| `microdot-core`    | One-shot Kademlia client + persistable peer pool + discovery orchestrator. Generic over `Connect`, `Storage`, `Clock` traits. Depends on James' (@jsdw) [`polkadot-p2p-connect`](https://github.com/paritytech/polkadot-p2p-connect) for the per-peer connection lifecycle (noise + yamux + multistream-select + substrate request-response). |
 | `microdot-browser` | Landing-zone crate for the browser adapter. It will satisfy the core traits using `web-sys`: WebSocket → `Connect`, localStorage → `Storage`, `Date.now()` → `Clock`, `window.crypto` → `PlatformT`. **Placeholder right now.** |
 
 A future `microdot-tokio` will mirror the browser adapter for native TCP +
