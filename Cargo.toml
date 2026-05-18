@@ -1,0 +1,43 @@
+# microdot — a tiny, testable substrate light-client toolkit.
+#
+# Workspace layout:
+#   microdot-core     — platform-agnostic kad client, peer pool, discovery
+#                       orchestrator. Depends on polkadot-p2p-connect for
+#                       the underlying single-peer connection lifecycle.
+#   microdot-browser  — WebSocket + localStorage + Crypto adapters that
+#                       implement microdot-core's `Connect` / `Storage` /
+#                       `Clock` / `PlatformT` traits in a browser tab.
+#   microdot-tokio    — (future) native equivalents over TCP + file IO.
+#   examples/         — runnable demos consuming the above.
+
+[workspace]
+resolver = "2"
+members = [
+    "microdot-core",
+    "microdot-browser",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.83"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/spongebob/microdot"
+
+[workspace.dependencies]
+# Single-peer connection lifecycle — handles noise + yamux + multistream
+# select + substrate's request-response / subscription protocols. Pinned
+# to the upstream Parity repo by URL; specific revs may be set later.
+polkadot-p2p-connect = { git = "https://github.com/paritytech/polkadot-p2p-connect" }
+
+anyhow = "1"
+bs58 = { version = "0.5", default-features = false, features = ["alloc"] }
+futures = { version = "0.3", default-features = false, features = ["alloc"] }
+hex = "0.4"
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+
+# microdot internal crates
+microdot-core = { path = "microdot-core", version = "0.0.1" }

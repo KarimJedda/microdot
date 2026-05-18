@@ -1,0 +1,32 @@
+[package]
+name = "microdot-core"
+description = "Platform-agnostic kad client, peer pool, and discovery orchestrator for substrate light clients."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+# rlib for unit tests on host; no cdylib because this crate has no FFI
+# entry points — those live in the platform adapter crates.
+crate-type = ["rlib"]
+
+[features]
+# Exposes in-memory `Clock` / `Storage` impls from `crate::testing` so
+# downstream adapter crates can share them in their own tests rather
+# than re-implementing each one. Off by default — wasm-pack release
+# builds shouldn't ship the helpers.
+testing = []
+
+[dependencies]
+polkadot-p2p-connect = { workspace = true }
+anyhow = { workspace = true }
+bs58 = { workspace = true }
+futures = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

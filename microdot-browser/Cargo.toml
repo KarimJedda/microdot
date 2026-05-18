@@ -1,0 +1,35 @@
+[package]
+name = "microdot-browser"
+description = "Browser-tab adapter (WebSocket + localStorage + Crypto) implementing microdot-core traits."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+# rlib for cargo test on host (most logic is just glue, but trait-impl
+# soundness is testable). cdylib for wasm-pack consumption.
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+microdot-core = { workspace = true }
+polkadot-p2p-connect = { workspace = true }
+futures = { workspace = true }
+log = { workspace = true }
+
+# wasm32 only — these crates pull in JavaScript bindings and fail to
+# build for non-wasm targets without `target."cfg(target_arch = ...)"`
+# gating. Use target-conditional deps so `cargo build --workspace`
+# on a linux host still succeeds for the type-checking pass.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+getrandom = { version = "0.2", features = ["js"] }
+web-sys = { version = "0.3", features = [
+    "WebSocket", "BinaryType", "MessageEvent",
+    "Window", "Crypto", "Storage",
+    "Performance",
+    "console",
+] }
