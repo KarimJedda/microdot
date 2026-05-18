@@ -10,6 +10,10 @@ without trusting a centralised RPC provider, and without shipping smoldot.
 > crate is intentionally still a placeholder; the WebSocket / localStorage /
 > Crypto bridge is the next extraction step.
 
+
+**Disclaimer**: This project is the result of Claude, Codex and Kimi working together very hard over the weekend. It is intended as a teaching project to understand how a read-only client could potentially work and not intended as a smoldot replacement. 
+
+
 ## What's in the workspace
 
 | Crate              | Purpose                                                                   |
