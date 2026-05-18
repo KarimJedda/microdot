@@ -20,3 +20,6 @@
 # Environment
 .env
 .env.local
+
+# Published to gh-pages branch, not main
+/example/
