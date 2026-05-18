@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>paseo-revive-dotli-web</title>
+  <style>
+    body { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+           background: #0d1117; color: #c9d1d9; padding: 1em;
+           font-size: 13px; line-height: 1.5; }
+    h1 { font-size: 1.3em; margin: 0 0 0.5em 0; color: #e6edf3; }
+    .sub { color: #8b949e; margin-bottom: 1em; font-size: 0.95em; }
+    pre#log { background: #161b22; padding: 1em; border-radius: 6px;
+              border: 1px solid #30363d; overflow: auto; max-height: 70vh;
+              white-space: pre-wrap; word-break: break-all; }
+    #result { margin-top: 1em; padding: 1em; border-radius: 6px;
+              border: 1px solid #30363d; background: #161b22; display: none; }
+    #result.ok { border-color: #238636; }
+    #result.err { border-color: #f85149; }
+    .cid { color: #58a6ff; word-break: break-all; }
+    .muted { color: #8b949e; }
+    a { color: #58a6ff; }
+  </style>
+</head>
+<body>
+  <h1 id="title">paseo-revive-dotli-web</h1>
+  <div class="sub">
+    trustless dotns resolution in the browser, against live Paseo &mdash;
+    no smoldot, no RPC, no WASM runtime execution.
+  </div>
+  <pre id="log"></pre>
+  <div id="result"></div>
+  <script type="module">
+    import init from './pkg/paseo_revive_dotli_web_discovery.js';
+    init().catch(err => {
+      const el = document.getElementById('log');
+      el.textContent += '\n[fatal] ' + err + '\n';
+    });
+  </script>
+</body>
+</html>

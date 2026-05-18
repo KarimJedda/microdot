@@ -1,0 +1,15 @@
+{
+  "name": "paseo-revive-dotli-web-discovery",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "paseo_revive_dotli_web_discovery_bg.wasm",
+    "paseo_revive_dotli_web_discovery.js",
+    "paseo_revive_dotli_web_discovery.d.ts"
+  ],
+  "main": "paseo_revive_dotli_web_discovery.js",
+  "types": "paseo_revive_dotli_web_discovery.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
