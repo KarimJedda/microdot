@@ -1,5 +1,7 @@
 # microdot
 
+Please read this first: [microdot rationale](https://blog.jedda.eu/bafybeiftqywairpupbszwhefmcwr4l2okt4yts3ngu4hrrxhp5du75zyli/)
+
 A tiny, testable, wasm-friendly toolkit for trustless reads against
 Substrate-based chains. Smoldot-shaped: import one crate, get peer
 discovery, GRANDPA finality, and merkle-proof verified state reads. The
