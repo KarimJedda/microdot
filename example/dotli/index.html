@@ -78,9 +78,14 @@
       goBtn.disabled = true;
       append(`[start] resolving "${label}.dot"`);
       try {
-        const cid = await resolve(label, append);
-        append(`[done] ${cid}`);
-        showResult(`<strong>${label}.dot</strong> &rarr; <span class="cid">${cid}</span>`, true);
+        const result = await resolve(label, append);
+        const { cid, verifiedAtBlock } = result;
+        append(`[done] ${cid} (verified at AssetHub block #${verifiedAtBlock})`);
+        showResult(
+          `<strong>${label}.dot</strong> &rarr; <span class="cid">${cid}</span>` +
+          `<div class="muted">verified at AssetHub block #${verifiedAtBlock}</div>`,
+          true,
+        );
       } catch (err) {
         append(`[error] ${err}`);
         showResult(`<strong>${label}.dot</strong> &rarr; <span class="cid">${err}</span>`, false);
