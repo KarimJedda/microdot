@@ -1,43 +1,80 @@
 # microdot — a tiny, testable substrate light-client toolkit.
 #
-# Workspace layout:
-#   microdot-core     — platform-agnostic kad client, peer pool, discovery
-#                       orchestrator. Depends on polkadot-p2p-connect for
-#                       the underlying single-peer connection lifecycle.
-#   microdot-browser  — WebSocket + localStorage + Crypto adapters that
-#                       implement microdot-core's `Connect` / `Storage` /
-#                       `Clock` / `PlatformT` traits in a browser tab.
-#   microdot-tokio    — (future) native equivalents over TCP + file IO.
-#   examples/         — runnable demos consuming the above.
+# Platform-agnostic kad client, peer pool, and discovery orchestrator.
+# Depends on polkadot-p2p-connect for the underlying single-peer
+# connection lifecycle (noise + yamux + multistream-select + substrate
+# request-response / notification protocols).
+#
+# Browser / native adapters that satisfy the `Connect` / `Storage` /
+# `Clock` traits live in downstream crates (e.g. a future
+# `microdot-light-js` wasm wrapper, à la smoldot's `light-js`).
 
-[workspace]
-resolver = "2"
-members = [
-    "microdot-core",
-    "microdot-browser",
-]
-
-[workspace.package]
+[package]
+name = "microdot"
+description = "Platform-agnostic kad client, peer pool, and discovery orchestrator for substrate light clients."
 version = "0.0.1"
 edition = "2021"
 rust-version = "1.83"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/spongebob/microdot"
 
-[workspace.dependencies]
+[lib]
+# rlib for unit tests on host; no cdylib because this crate has no FFI
+# entry points — those belong in a downstream wasm wrapper.
+crate-type = ["rlib"]
+
+[features]
+# Exposes in-memory `Clock` / `Storage` impls from `crate::testing` so
+# downstream adapter crates can share them in their own tests rather
+# than re-implementing each one. Off by default — wasm release builds
+# shouldn't ship the helpers.
+testing = []
+
+[dependencies]
 # Single-peer connection lifecycle — handles noise + yamux + multistream
-# select + substrate's request-response / subscription protocols. Pinned
-# to the upstream Parity repo by URL; specific revs may be set later.
-polkadot-p2p-connect = { git = "https://github.com/paritytech/polkadot-p2p-connect" }
+# select + substrate's request-response / subscription protocols. Pulled
+# from KarimJedda's fork because the upstream paritytech repo lacks the
+# warp-sync lib crate and the yamux cooperative-yield fix this project
+# depends on.
+polkadot-p2p-connect = { git = "https://github.com/KarimJedda/polkadot-p2p-connect" }
+
+# GRANDPA warp-sync, authority-set tracking, lightSyncState checkpoint
+# loading, and Substrate wire-format types (BlockHeader, etc.). Sits one
+# layer above polkadot-p2p-connect and is re-exported through microdot's
+# lib so consumers get a single smoldot-style import surface.
+warp-sync = { git = "https://github.com/KarimJedda/polkadot-p2p-connect" }
 
 anyhow = "1"
 bs58 = { version = "0.5", default-features = false, features = ["alloc"] }
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
-hex = "0.4"
 log = "0.4"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
 thiserror = "1"
 
-# microdot internal crates
-microdot-core = { path = "microdot-core", version = "0.0.1" }
+# State-proof verification (microdot::state). Deliberately avoids
+# sp-state-machine because its std feature transitively pulls in
+# substrate-prometheus-endpoint → hyper → tokio → mio, none of which
+# compile to wasm32-unknown-unknown. CompactProof + TrieDBBuilder +
+# trie-db work without std and give us the same trust property.
+sp-core = { version = "41", default-features = false }
+sp-trie = { version = "44", default-features = false }
+trie-db = { version = "0.31", default-features = false }
+parity-scale-codec = { version = "3", default-features = false, features = ["derive"] }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+
+# wasm32-unknown-unknown specifically: `getrandom` is pulled in
+# transitively (via sp-core / ed25519-dalek) and refuses to build for
+# wasm without an explicit randomness source. Enabling the `js`
+# feature wires it to `crypto.getRandomValues`, which is what every
+# browser already provides. Native targets ignore this stanza.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
+
+[dev-dependencies]
+serde_json = "1"
+# In dev/test builds we want the full `futures` (in particular
+# `futures::executor::block_on`) to drive async tests. Cargo unifies
+# features across [dependencies] and [dev-dependencies], so the lib
+# build itself stays at the `default-features = false, features =
+# ["alloc"]` shape declared above.
+futures = "0.3"

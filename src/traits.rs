@@ -26,7 +26,7 @@ use polkadot_p2p_connect::{AsyncRead, AsyncWrite};
 ///
 /// The `url` argument is a flat `wss://host:port/` (browser) or
 /// `host:port` (native TCP) string — whichever shape the adapter
-/// expects. microdot-core's discovery layer feeds it the result of
+/// expects. microdot's discovery layer feeds it the result of
 /// [`crate::kad::multiaddr_to_wss_url`] or
 /// [`crate::kad::parse_bootnode_multiaddr`], which always produce
 /// `wss://…` strings. Native adapters can parse those back to a
@@ -50,7 +50,7 @@ pub trait Connect {
 }
 
 /// Durable bytes-bag. Used by the consumer-supplied state layer to
-/// persist things across page reloads / process restarts. microdot-core
+/// persist things across page reloads / process restarts. microdot
 /// itself does not call `Storage` directly — it's exposed here so
 /// downstream pool-persistence helpers can build on a single trait.
 pub trait Storage {
@@ -173,9 +173,9 @@ mod tests {
     }
 }
 
-// Re-export the test helpers under a `pub mod testing` so consumer
-// crates (microdot-browser, microdot-tokio, examples) can reuse them
-// in their own tests.
+// Re-export the test helpers under a `pub mod testing` so downstream
+// adapter crates (wasm bindings, tokio bridge, examples) can reuse
+// them in their own tests.
 #[cfg(any(test, feature = "testing"))]
 pub mod testing {
     use super::*;

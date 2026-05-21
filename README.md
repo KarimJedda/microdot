@@ -6,25 +6,32 @@ without trusting a centralised RPC provider, and without shipping smoldot.
 
 > Status: very early. The platform-agnostic core (kad client, peer pool,
 > discovery orchestrator) is extracted from a working browser prototype,
-> generic over host traits, and covered by 24 unit tests. The browser adapter
-> crate is intentionally still a placeholder; the WebSocket / localStorage /
-> Crypto bridge is the next extraction step.
+> generic over host traits, and covered by 24 unit tests. Browser / native
+> adapters (WebSocket / localStorage / Crypto, or TCP / file / SystemTime)
+> are intended to live in downstream crates, à la smoldot's `light-js`.
 
 
 **Disclaimer**: This project is the result of Claude, Codex and Kimi working together very hard over the weekend. It is intended as a teaching project to understand how a read-only client could potentially work and not intended as a smoldot replacement. 
 
 
-## What's in the workspace
+## What's in the crate
 
-| Crate              | Purpose                                                                   |
-|--------------------|---------------------------------------------------------------------------|
-| `microdot-core`    | One-shot Kademlia client + persistable peer pool + discovery orchestrator. Generic over `Connect`, `Storage`, `Clock` traits. Depends on James' (@jsdw) [`polkadot-p2p-connect`](https://github.com/paritytech/polkadot-p2p-connect) for the per-peer connection lifecycle (noise + yamux + multistream-select + substrate request-response). |
-| `microdot-browser` | Landing-zone crate for the browser adapter. It will satisfy the core traits using `web-sys`: WebSocket → `Connect`, localStorage → `Storage`, `Date.now()` → `Clock`, `window.crypto` → `PlatformT`. **Placeholder right now.** |
+`microdot` is a single Rust crate providing a one-shot Kademlia client, a
+persistable peer pool, and a discovery orchestrator. It's generic over
+`Connect`, `Storage`, and `Clock` traits, so it composes against any
+transport / persistence / time source. It depends on James' (@jsdw)
+[`polkadot-p2p-connect`](https://github.com/paritytech/polkadot-p2p-connect)
+for the per-peer connection lifecycle (noise + yamux + multistream-select +
+substrate request-response).
 
-A future `microdot-tokio` will mirror the browser adapter for native TCP +
-file-backed storage, and a `microdot-queries` crate will hold higher-level
-helpers (warp-sync, state-read with proof verification, pool-aware query
-wrappers) that currently live inline in prototype/example apps.
+Browser and native adapters live downstream. A future `microdot-light-js`
+will satisfy the core traits using `web-sys` (WebSocket → `Connect`,
+localStorage → `Storage`, `Date.now()` → `Clock`, `window.crypto` →
+`PlatformT`) and ship as an npm package, mirroring smoldot's `light-js`
+wrapper. A `microdot-tokio` will do the same for native TCP + file-backed
+storage, and a `microdot-queries` crate will hold higher-level helpers
+(warp-sync, state-read with proof verification, pool-aware query wrappers)
+that currently live inline in prototype/example apps.
 
 ## Why "microdot"?
 
@@ -51,7 +58,7 @@ intentionally leaves out everything multi-peer.
 * **Support** the hot path: the pool can pick the best available peer and
   record success/failure, while query wrappers are still app-level code.
 
-The two libraries compose cleanly because `microdot-core` consumes the
+The two libraries compose cleanly because `microdot` consumes the
 `polkadot-p2p-connect` `Connection<R, W, P>` type via traits — no wrapper, no
 fork, no duplicated code paths.
 
@@ -66,7 +73,7 @@ X" + "this client read storage key Y at block N".
 
 This is implemented by separating bootnodes from discovered peers:
 
-1. `microdot-core::discovery` does not directly observe the probed bootnode
+1. `microdot::discovery` does not directly observe the probed bootnode
    into the pool, even after a successful probe. Bootnodes live in a separate
    host-supplied list and serve as the discovery seed and last-resort fallback.
 2. The pool is intended for peers learned via `FIND_NODE` responses. Hosts
@@ -85,13 +92,13 @@ without a browser, a network, or a clock**.
 
 Current state:
 
-* `microdot-core::kad` — 11 unit tests covering protobuf encoding, multiaddr
+* `microdot::kad` — 11 unit tests covering protobuf encoding, multiaddr
   decoding (positive + negative), bootnode-string parsing.
-* `microdot-core::peer_pool` — 7 unit tests covering reputation, quarantine,
+* `microdot::peer_pool` — 7 unit tests covering reputation, quarantine,
   eviction, serde round-trip.
-* `microdot-core::traits` — 4 unit tests of the in-memory `TestClock` and
+* `microdot::traits` — 4 unit tests of the in-memory `TestClock` and
   `MemoryStorage` helpers + dyn-safety.
-* `microdot-core::discovery` — 2 unit tests covering the report shape and
+* `microdot::discovery` — 2 unit tests covering the report shape and
   the clock-driven observation timestamp.
 
 Total: **24/24 passing**. The roadmap is to expand to several hundred tests
@@ -103,22 +110,12 @@ exercises real Paseo bootnodes.
 ## Building
 
 ```
-cargo test --workspace
+cargo test
 ```
 
-That's it for now. The browser adapter crate compiles for both host (`rlib`,
-no JS bindings — type-checking only) and `wasm32-unknown-unknown` (`cdylib`,
-target-conditional wasm dependencies), but it does not yet expose the real
-WebSocket / localStorage / Crypto implementation.
-
-To build for wasm:
-
-```
-cd microdot-browser
-wasm-pack build --target web --dev
-```
-
-(Packaging will become useful once the adapter is filled in.)
+That's it for now. A future `microdot-light-js` crate will provide the
+browser bindings (cdylib + wasm-pack) and ship as an npm package; today
+this crate is host-only (`rlib`) and remains target-agnostic.
 
 ## Architecture diagram
 
@@ -129,7 +126,7 @@ wasm-pack build --target web --dev
 └────────────────────────────────────┬─────────────────────────┘
                                      │
 ┌────────────────────────────────────▼─────────────────────────┐
-│ microdot-core                                                │
+│ microdot                                                     │
 │   ┌──────────────────────────────────────────────────────┐   │
 │   │ kad        peer_pool       discovery                 │   │
 │   │   ▲          ▲                ▲                      │   │
@@ -145,15 +142,15 @@ wasm-pack build --target web --dev
 └──────────────────────────────────────────────────────────────┘
                                      │  AsyncRead/AsyncWrite traits
 ┌────────────────────────────────────▼─────────────────────────┐
-│ microdot-browser (WebSocket / localStorage / web_sys crypto) │
-│ microdot-tokio   (TCP / file / SystemTime)  ← future         │
+│ microdot-light-js  (WebSocket / localStorage / web_sys)      │
+│ microdot-tokio     (TCP / file / SystemTime)    ← future     │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 Reading the layers bottom-up: the host environment provides `AsyncRead` +
 `AsyncWrite` (just bytes). `polkadot-p2p-connect` layers noise + yamux +
 multistream + substrate protocols on top to give you a typed `Connection`.
-`microdot-core` layers peer discovery, reputation, and discovery orchestration
+`microdot` layers peer discovery, reputation, and discovery orchestration
 on top of that. Today, application code owns the pool-aware query wrappers;
 those are planned to move into `microdot-queries`.
 

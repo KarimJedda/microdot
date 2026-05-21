@@ -73,7 +73,7 @@ pub struct ProbeOutcome {
 }
 
 /// Summary of one discovery burst. Returned to the caller so they can
-/// log / surface metrics without microdot-core taking a dependency on
+/// log / surface metrics without microdot taking a dependency on
 /// any particular logging facade.
 #[derive(Debug, Clone, Default)]
 pub struct DiscoveryReport {
