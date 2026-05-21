@@ -142,9 +142,10 @@ where
     let timeout = P::sleep(PER_PROBE_TIMEOUT);
     let result = match futures::future::select(Box::pin(inner), Box::pin(timeout)).await {
         futures::future::Either::Left((res, _)) => res,
-        futures::future::Either::Right((_, _)) => {
-            Err(format!("probe timed out after {}s", PER_PROBE_TIMEOUT.as_secs()))
-        }
+        futures::future::Either::Right((_, _)) => Err(format!(
+            "probe timed out after {}s",
+            PER_PROBE_TIMEOUT.as_secs()
+        )),
     };
     ProbeOutcome {
         bootnode_peer_id: peer_id,

@@ -320,7 +320,9 @@ impl microdot::Connect for BrowserConnect {
     type Writer = WsWriter;
     type Error = String;
     type Future<'a>
-        = core::pin::Pin<Box<dyn core::future::Future<Output = Result<(WsReader, WsWriter), String>> + 'a>>
+        = core::pin::Pin<
+        Box<dyn core::future::Future<Output = Result<(WsReader, WsWriter), String>> + 'a>,
+    >
     where
         Self: 'a;
 
@@ -444,8 +446,14 @@ async fn run_inner(label: String) -> anyhow::Result<RunResult> {
 
     let namehash = namehash_eip137(&full_name);
     let base_slot_key = compute_mapping_slot(&namehash, CONTENTHASH_SLOT);
-    log(&format!("[dotns] namehash      = 0x{}", hex::encode(namehash)));
-    log(&format!("[dotns] base slot key = 0x{}", hex::encode(base_slot_key)));
+    log(&format!(
+        "[dotns] namehash      = 0x{}",
+        hex::encode(namehash)
+    ));
+    log(&format!(
+        "[dotns] base slot key = 0x{}",
+        hex::encode(base_slot_key)
+    ));
 
     let total_start = now_ms();
 
@@ -597,13 +605,20 @@ async fn run_inner(label: String) -> anyhow::Result<RunResult> {
     // as they stand AFTER the hot-path's reputation updates, runs the
     // burst (10s hard cap per probe), then reloads state and persists the
     // merged pools. Outlives `run()` because spawn_local detaches.
-    spawn_background_discovery(persisted.relay_peers.clone(), persisted.assethub_peers.clone());
+    spawn_background_discovery(
+        persisted.relay_peers.clone(),
+        persisted.assethub_peers.clone(),
+    );
 
     let elapsed = now_ms() - total_start;
     let cache_note = if head_was_cached {
-        let age = (state::unix_now_ms()
-            .saturating_sub(persisted.assethub_head.as_ref().map(|c| c.saved_at_unix_ms).unwrap_or(0)))
-            / 1000;
+        let age = (state::unix_now_ms().saturating_sub(
+            persisted
+                .assethub_head
+                .as_ref()
+                .map(|c| c.saved_at_unix_ms)
+                .unwrap_or(0),
+        )) / 1000;
         format!(" — head cached, {age}s old")
     } else {
         String::new()
@@ -771,11 +786,8 @@ async fn relay_phase_with_pool(
     // `GrandpaState` by value, so each attempt's mutations stay local
     // to that invocation — the snapshot itself is read-only here.
     let relay_snapshot = persisted.relay.clone();
-    let result = microdot::run_with_pool_fallback(
-        &mut persisted.relay_peers,
-        RELAY_WSS,
-        &clock,
-        |url| {
+    let result =
+        microdot::run_with_pool_fallback(&mut persisted.relay_peers, RELAY_WSS, &clock, |url| {
             let snapshot = relay_snapshot.clone();
             let url = url.to_string();
             async move {
@@ -783,9 +795,8 @@ async fn relay_phase_with_pool(
                     .map_err(|e| format!("relay state snapshot: {e}"))?;
                 relay_phase(gs, &url).await.map_err(|e| format!("{e}"))
             }
-        },
-    )
-    .await;
+        })
+        .await;
     result.map_err(|e| anyhow::anyhow!(e))
 }
 
@@ -820,10 +831,7 @@ async fn assethub_phase_with_pool(
 /// Detach a background task that runs the discovery burst for both
 /// pools concurrently, then reloads the latest persisted state, replaces
 /// the two pool fields, and saves. Outlives `run()`.
-fn spawn_background_discovery(
-    relay_pool: microdot::PeerPool,
-    assethub_pool: microdot::PeerPool,
-) {
+fn spawn_background_discovery(relay_pool: microdot::PeerPool, assethub_pool: microdot::PeerPool) {
     wasm_bindgen_futures::spawn_local(async move {
         log("[discovery] background burst starting (relay + assethub in parallel)");
         let connect = BrowserConnect;
@@ -873,7 +881,9 @@ fn spawn_background_discovery(
                     ));
                 }
             }
-            Err(e) => log(&format!("[discovery] could not reload state for merge: {e}")),
+            Err(e) => log(&format!(
+                "[discovery] could not reload state for merge: {e}"
+            )),
         }
     });
 }
@@ -910,12 +920,18 @@ async fn relay_phase(
             .with_timeout(Duration::from_secs(30)),
     );
 
-    let (reader, writer) = open_ws(wss_url, WS_OPEN_TIMEOUT).await.map_err(|e| anyhow::anyhow!(e))?;
+    let (reader, writer) = open_ws(wss_url, WS_OPEN_TIMEOUT)
+        .await
+        .map_err(|e| anyhow::anyhow!(e))?;
     let mut conn = config
         .connect(reader, writer)
         .await
         .map_err(|e| anyhow::anyhow!("relay handshake: {e}"))?;
-    log(&format!("[relay] connected as {} → {}", conn.our_id(), conn.their_id()));
+    log(&format!(
+        "[relay] connected as {} → {}",
+        conn.our_id(),
+        conn.their_id()
+    ));
 
     conn.subscribe(ba_id)?;
 
@@ -1031,7 +1047,9 @@ async fn assethub_phase(
             .with_timeout(Duration::from_secs(30)),
     );
 
-    let (reader, writer) = open_ws(wss_url, WS_OPEN_TIMEOUT).await.map_err(|e| anyhow::anyhow!(e))?;
+    let (reader, writer) = open_ws(wss_url, WS_OPEN_TIMEOUT)
+        .await
+        .map_err(|e| anyhow::anyhow!(e))?;
     let mut conn = config
         .connect(reader, writer)
         .await
@@ -1049,7 +1067,10 @@ async fn assethub_phase(
     let contract_key_hex = hex::encode(contract_addr);
     let (trie_id, fetched_trie_id) = match cached_trie_id {
         Some(t) => {
-            log(&format!("[assethub] using cached trie_id: 0x{}", hex::encode(t)));
+            log(&format!(
+                "[assethub] using cached trie_id: 0x{}",
+                hex::encode(t)
+            ));
             (t.to_vec(), None)
         }
         None => {
@@ -1067,9 +1088,12 @@ async fn assethub_phase(
             }
             let trie_id = match acc.account_type {
                 AccountType::Contract(info) => info.trie_id,
-                AccountType::EOA => anyhow::bail!("no contract at 0x{contract_key_hex}"),
+                AccountType::Eoa => anyhow::bail!("no contract at 0x{contract_key_hex}"),
             };
-            log(&format!("[assethub] fetched trie_id = 0x{}", hex::encode(&trie_id)));
+            log(&format!(
+                "[assethub] fetched trie_id = 0x{}",
+                hex::encode(&trie_id)
+            ));
             (trie_id.clone(), Some(trie_id))
         }
     };
@@ -1098,7 +1122,7 @@ async fn assethub_phase(
         let total_len = decode_long_bytes_length(&base_slot)?;
         log(&format!("[assethub] long value, length={total_len}"));
         let data_slot_base = keccak_256(base_slot_key);
-        let n_slots = (total_len + 31) / 32;
+        let n_slots = total_len.div_ceil(32);
         let mut out = Vec::with_capacity(total_len);
         for i in 0..n_slots {
             let slot_key = u256_add(&data_slot_base, i as u64);
@@ -1169,7 +1193,8 @@ async fn request_child_slot(
 ) -> anyhow::Result<[u8; 32]> {
     let child_key = sp_core::hashing::blake2_256(raw_slot_key);
     let top_key = microdot::child_storage_default_prefix(trie_id);
-    let req = microdot::encode_state_request(block_hash, &[top_key.as_slice(), child_key.as_slice()]);
+    let req =
+        microdot::encode_state_request(block_hash, &[top_key.as_slice(), child_key.as_slice()]);
     conn.request(state_id, req)?;
     let bytes = wait_for_state_response(conn, state_id).await?;
     let value = microdot::verify_child_proof(&bytes, expected_state_root, trie_id, &child_key)
@@ -1218,7 +1243,7 @@ struct AccountInfo {
 #[derive(Decode, Debug)]
 enum AccountType {
     Contract(ContractInfo),
-    EOA,
+    Eoa,
 }
 
 #[derive(Decode, Debug)]

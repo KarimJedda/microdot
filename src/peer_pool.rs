@@ -109,15 +109,25 @@ impl PeerPool {
     /// Pick the highest-scoring available peer. Ties broken by recency.
     /// Returns `None` if every peer is quarantined or the pool is empty.
     pub fn pick_best(&self, now_ms: u64) -> Option<(String, PeerEntry)> {
-        self.peers
+        self.ranked_available(now_ms).into_iter().next()
+    }
+
+    /// Return all available peers sorted from best to worst. Score is
+    /// primary; recency breaks ties. The returned entries are cloned so
+    /// callers can attempt async work without holding a borrow on the pool.
+    pub fn ranked_available(&self, now_ms: u64) -> Vec<(String, PeerEntry)> {
+        let mut available: Vec<_> = self
+            .peers
             .iter()
             .filter(|(_id, e)| e.is_available(now_ms))
-            .max_by(|a, b| {
-                a.1.score()
-                    .cmp(&b.1.score())
-                    .then_with(|| a.1.last_seen_unix_ms.cmp(&b.1.last_seen_unix_ms))
-            })
             .map(|(id, e)| (id.clone(), e.clone()))
+            .collect();
+        available.sort_by(|a, b| {
+            b.1.score()
+                .cmp(&a.1.score())
+                .then_with(|| b.1.last_seen_unix_ms.cmp(&a.1.last_seen_unix_ms))
+        });
+        available
     }
 
     pub fn record_success(&mut self, peer_id_base58: &str, now_ms: u64) {
@@ -219,6 +229,27 @@ mod tests {
     }
 
     #[test]
+    fn ranked_available_returns_best_to_worst_and_skips_quarantine() {
+        let mut p = PeerPool::new();
+        p.observe("OLD".into(), "wss://old/".into(), t(1));
+        p.observe("BEST".into(), "wss://best/".into(), t(2));
+        p.observe("NEW".into(), "wss://new/".into(), t(100));
+        p.observe("BAD".into(), "wss://bad/".into(), t(200));
+
+        p.record_success("BEST", t(201));
+        p.record_failure("BAD", t(202));
+        p.record_failure("BAD", t(203));
+        p.record_failure("BAD", t(204));
+
+        let ranked: Vec<_> = p
+            .ranked_available(t(205))
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+        assert_eq!(ranked, vec!["BEST", "NEW", "OLD"]);
+    }
+
+    #[test]
     fn quarantine_after_three_consecutive_failures() {
         let mut p = PeerPool::new();
         p.observe("A".into(), "wss://a/".into(), t(0));
@@ -267,7 +298,7 @@ mod tests {
         assert_eq!(p.len(), MAX_POOL_SIZE);
         // The "p000".."p004" entries (with failures) should be gone.
         for i in 0..5 {
-            assert!(p.peers.get(&format!("p{i:03}")).is_none());
+            assert!(!p.peers.contains_key(&format!("p{i:03}")));
         }
     }
 

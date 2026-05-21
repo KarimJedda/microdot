@@ -14,9 +14,10 @@
 //!   harvest peers, fold into the pool. Generic over [`Connect`] and
 //!   [`Clock`] so it works against any transport and supports
 //!   deterministic tests.
-//! * **request** — pool-aware retry combinator. Pick the best pooled
-//!   peer, run a user-supplied async closure against it, record
-//!   success/failure, fall back to a bootnode on failure or empty pool.
+//! * **request** — pool-aware retry combinator. Try available pooled
+//!   peers from best to worst, run a user-supplied async closure,
+//!   record success/failure, and fall back to a bootnode only when the
+//!   pool is empty or exhausted.
 //! * **state** — wasm-compatible state-proof verification.
 //!   [`verify_top_proof`] / [`verify_child_proof`] take a `/state/2`
 //!   response and a finalized state root and return the value at a
@@ -103,6 +104,6 @@ pub use traits::{Clock, Connect, Storage};
 // types and warp-sync protocol logic belong on the polkadot-p2p-connect
 // side of the layer cake.
 pub use warp_sync::{
-    AuthorityId, BlockDigest, BlockDigestItem, BlockHash, BlockHeader, ConsensusEngineId,
-    GrandpaState, Hash, checkpoint, load_checkpoint,
+    checkpoint, load_checkpoint, AuthorityId, BlockDigest, BlockDigestItem, BlockHash, BlockHeader,
+    ConsensusEngineId, GrandpaState, Hash,
 };

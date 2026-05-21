@@ -10,7 +10,7 @@ trusting a centralised RPC provider, and without shipping smoldot.
 > core (kad client, peer pool, discovery orchestrator, pool-aware
 > request combinator, wasm-compatible state-proof verification, plus
 > re-exported GRANDPA warp-sync from a sibling crate) is covered by
-> 34 unit tests and builds for both native and `wasm32-unknown-unknown`.
+> 36 unit tests and builds for both native and `wasm32-unknown-unknown`.
 > A working browser example (`example/dotli`) does trustless
 > `<label>.dot` → IPFS CID resolution against live Paseo Asset Hub
 > Next in ~1300 lines of app code — down from ~2800 in the inline
@@ -31,7 +31,7 @@ finality layer:
 | `microdot::kad`         | One-shot Kademlia `FIND_NODE` over a `polkadot-p2p-connect` `Connection`. Decodes the response, filters peers to those with a browser-reachable `wss://` endpoint.                        |
 | `microdot::peer_pool`   | Persistable reputation pool. Tracks success/failure per peer, quarantines on consecutive failures, evicts to a configurable cap. `serde` round-trippable.                                  |
 | `microdot::discovery`   | Orchestrator. Fans probes out to known bootnodes, harvests peers from each, folds them into the pool. Generic over `Connect` and `Clock` so it works against any transport.                |
-| `microdot::request`     | Pool-aware retry combinator. `run_with_pool_fallback(pool, bootnode, clock, request)` picks the best peer, runs the user closure, records success/failure, falls back to the bootnode.    |
+| `microdot::request`     | Pool-aware retry combinator. `run_with_pool_fallback(pool, bootnode, clock, request)` tries pooled peers by reputation, records success/failure, then falls back to the bootnode.          |
 | `microdot::state`       | Wasm-compatible state-proof verification. `verify_top_proof` / `verify_child_proof` decode a `/state/2` response, verify the compact proof against a finalized state root, return the value. |
 | `microdot::traits`      | The three platform-shaped traits the layers above are written against: `Connect` (byte streams to peer URLs), `Storage` (durable key/value), `Clock` (millis).                              |
 | **(re-exported)**       | `GrandpaState`, `BlockHeader`, `BlockHash`, `Hash`, `AuthorityId`, `BlockDigest`, `checkpoint`, `load_checkpoint` — from the sibling `warp-sync` crate.                                     |
@@ -78,9 +78,10 @@ know about peers or transports.
 * **Orchestrate** discovery: fan out Kademlia probes, fold
   browser-reachable peers into the pool, and return a report the host
   can log or persist.
-* **Route** requests through the pool: `run_with_pool_fallback` picks
-  the best peer, attempts the user-supplied async closure, records
-  outcomes on the pool, falls back to a bootnode if needed.
+* **Route** requests through the pool: `run_with_pool_fallback` tries
+  available peers from best to worst, attempts the user-supplied async
+  closure, records outcomes on the pool, and falls back to a bootnode
+  only after the pool is empty or exhausted.
 * **Verify** state reads: take a `/state/2` response from any peer,
   verify the merkle proof against a finalized state root from
   `warp-sync`, return the trusted value.
@@ -92,13 +93,13 @@ code paths.
 
 ## Privacy property
 
-By design, **the hot path never queries a bootnode once the pool is
-warm**. Bootnodes are used only for the (short, content-free) Kademlia
-probe that discovers other peers. Any actual chain query (`/sync/warp`,
-`/state/2`, etc.) flows through a peer the bootnode doesn't know we're
-talking to. This means no single party sees both halves of "this
-client did kad discovery for chain X" + "this client read storage key Y
-at block N".
+By design, **the hot path tries every available pooled peer before
+querying a bootnode**. Bootnodes are used primarily for the (short,
+content-free) Kademlia probe that discovers other peers. Actual chain
+queries (`/sync/warp`, `/state/2`, etc.) flow through discovered peers
+while at least one pooled peer succeeds, so no single party sees both
+halves of "this client did kad discovery for chain X" + "this client
+read storage key Y at block N".
 
 This is implemented by separating bootnodes from discovered peers:
 
@@ -110,7 +111,7 @@ This is implemented by separating bootnodes from discovered peers:
    Hosts should purge/filter any known bootnode peer IDs when loading
    or merging persisted pools.
 3. `microdot::run_with_pool_fallback` retries against a bootnode only
-   when the pool is empty/exhausted *or* the pool peer's attempt
+   when the pool is empty/exhausted or every available pooled peer
    failed. The bootnode is **not** added to the pool by the combinator.
 
 Caveat: the **first ever** cold load has no pool yet and necessarily
@@ -124,12 +125,12 @@ The core philosophy: **maximise pure functions, trait-bound the rest,
 make the platform layer thin enough that almost everything can be
 unit-tested without a browser, a network, or a clock**.
 
-Current state — **34/34 tests passing** on native:
+Current state — **36/36 core tests passing** on native:
 
 * `microdot::kad` — 11 unit tests covering protobuf encoding, multiaddr
   decoding (positive + negative), bootnode-string parsing.
-* `microdot::peer_pool` — 7 unit tests covering reputation, quarantine,
-  eviction, serde round-trip.
+* `microdot::peer_pool` — 8 unit tests covering reputation, quarantine,
+  ranked peer selection, eviction, serde round-trip.
 * `microdot::traits` — 4 unit tests of the in-memory `TestClock` and
   `MemoryStorage` helpers + dyn-safety.
 * `microdot::discovery` — 2 unit tests covering the report shape and
@@ -137,10 +138,10 @@ Current state — **34/34 tests passing** on native:
 * `microdot::state` — 6 unit tests covering child-storage prefix
   layout, `StateRequest` encoding, varint round-trip, proof extraction,
   missing-field handling, garbage-input safety.
-* `microdot::request` — 4 unit tests of the pool-aware combinator:
-  records success on the pool peer, records failure + retries against
-  bootnode, falls back when pool is empty, surfaces bootnode error
-  when both paths fail.
+* `microdot::request` — 5 unit tests of the pool-aware combinator:
+  records success on the pool peer, records failure + retries through
+  the ranked pool before bootnode fallback, falls back when pool is
+  empty, surfaces bootnode error when all paths fail.
 
 The roadmap is to expand to several hundred tests using property-based
 testing (`proptest`), snapshot testing (`insta`), mocked transport (a
@@ -196,9 +197,9 @@ WebSocket adapter, DOM glue) are all app-domain. Everything else —
 peer discovery, pool management, pool-aware retries, GRANDPA finality,
 state-proof verification — is `microdot::*`.
 
-> `example/` is gitignored on `main` (it's intended to be published on
-> `gh-pages`), so don't be surprised when `git status` shows it as
-> clean after a fresh build.
+`example/dotli` is part of the Cargo workspace, so root-level
+`cargo test`, `cargo fmt --all --check`, and `cargo clippy --all-targets`
+cover both the core crate and the browser example.
 
 ## Architecture diagram
 

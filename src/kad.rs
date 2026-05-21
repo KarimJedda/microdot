@@ -154,9 +154,7 @@ pub fn decode_find_node_response(bytes: &[u8]) -> anyhow::Result<Vec<DiscoveredP
             (_, 1) => {
                 take_bytes(&mut input, 8)?;
             }
-            (_, w) => anyhow::bail!(
-                "kad response: unsupported wire type {w} on field {field_id}"
-            ),
+            (_, w) => anyhow::bail!("kad response: unsupported wire type {w} on field {field_id}"),
         }
     }
     Ok(out)
@@ -405,8 +403,8 @@ mod tests {
 
     fn make_target() -> [u8; 38] {
         let mut k = [0u8; 32];
-        for i in 0..32 {
-            k[i] = i as u8;
+        for (i, byte) in k.iter_mut().enumerate() {
+            *byte = i as u8;
         }
         target_multihash(&k)
     }
@@ -420,12 +418,13 @@ mod tests {
         assert_eq!(t[3], 0x01);
         assert_eq!(t[4], 0x12);
         assert_eq!(t[5], 0x20);
-        assert_eq!(t[6..38], [
-            0, 1, 2, 3, 4, 5, 6, 7,
-            8, 9, 10, 11, 12, 13, 14, 15,
-            16, 17, 18, 19, 20, 21, 22, 23,
-            24, 25, 26, 27, 28, 29, 30, 31,
-        ]);
+        assert_eq!(
+            t[6..38],
+            [
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+                23, 24, 25, 26, 27, 28, 29, 30, 31,
+            ]
+        );
     }
 
     #[test]
@@ -504,7 +503,10 @@ mod tests {
         let s = "/dns/host.example/tcp/443/wss/p2p/12D3KooWAB";
         assert_eq!(
             parse_bootnode_multiaddr(s),
-            Some(("12D3KooWAB".to_string(), "wss://host.example:443/".to_string()))
+            Some((
+                "12D3KooWAB".to_string(),
+                "wss://host.example:443/".to_string()
+            ))
         );
     }
 
@@ -513,7 +515,10 @@ mod tests {
         let s = "/dns/host.example/tcp/443/tls/ws/p2p/12D3KooWAB";
         assert_eq!(
             parse_bootnode_multiaddr(s),
-            Some(("12D3KooWAB".to_string(), "wss://host.example:443/".to_string()))
+            Some((
+                "12D3KooWAB".to_string(),
+                "wss://host.example:443/".to_string()
+            ))
         );
     }
 

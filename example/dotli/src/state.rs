@@ -91,9 +91,9 @@ pub fn load_or_bundled() -> anyhow::Result<(PersistedState, Source)> {
             Ok(state) if state.version == VERSION => {
                 return Ok((state, Source::SavedLocalStorage));
             }
-            Ok(_) => crate::log(
-                "[state] schema version mismatch; falling back to bundled checkpoint",
-            ),
+            Ok(_) => {
+                crate::log("[state] schema version mismatch; falling back to bundled checkpoint")
+            }
             Err(e) => crate::log(&format!(
                 "[state] failed to parse saved state ({e}); falling back to bundled checkpoint"
             )),
@@ -129,9 +129,10 @@ fn load_bundled() -> anyhow::Result<PersistedState> {
 }
 
 impl PersistedState {
-    #[allow(dead_code)] // kept as part of the published surface; the
-    // pool-fallback path in `lib.rs` calls `snapshot_to_grandpa_state`
-    // instead so it can hold the snapshot independent of `&self`.
+    // Kept as part of the published surface; the pool-fallback path in
+    // `lib.rs` calls `snapshot_to_grandpa_state` instead so it can hold
+    // the snapshot independent of `&self`.
+    #[allow(dead_code)]
     pub fn to_grandpa_state(&self) -> anyhow::Result<GrandpaState> {
         Self::snapshot_to_grandpa_state(&self.relay)
     }
@@ -143,11 +144,9 @@ impl PersistedState {
     pub fn snapshot_to_grandpa_state(relay: &RelaySnapshot) -> anyhow::Result<GrandpaState> {
         let authorities_bytes = decode_0x(&relay.authorities_scale)?;
         let authorities: Vec<(AuthorityId, u64)> =
-            Decode::decode(&mut &authorities_bytes[..])
-                .context("decoding authorities_scale")?;
+            Decode::decode(&mut &authorities_bytes[..]).context("decoding authorities_scale")?;
         let finalized_hash: [u8; 32] = decode_0x_array(&relay.finalized_hash)?;
-        let finalized_state_root: [u8; 32] =
-            decode_0x_array(&relay.finalized_state_root)?;
+        let finalized_state_root: [u8; 32] = decode_0x_array(&relay.finalized_state_root)?;
         Ok(GrandpaState {
             authorities,
             set_id: relay.set_id,

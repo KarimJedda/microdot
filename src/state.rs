@@ -3,8 +3,8 @@
 //!
 //! Deliberately avoids `sp-state-machine`: its `std` feature pulls in
 //! `substrate-prometheus-endpoint → hyper → tokio → mio`, none of which
-//! compile to `wasm32-unknown-unknown`. `CompactProof` + `TrieDBBuilder`
-//! + `trie-db` give the same trust property without the dependency
+//! compile to `wasm32-unknown-unknown`. `CompactProof`, `TrieDBBuilder`,
+//! and `trie-db` give the same trust property without the dependency
 //! weight, and work in both native and browser builds.
 //!
 //! The trust chain — GRANDPA → finalized block header → `state_root` →
@@ -24,8 +24,8 @@
 
 use parity_scale_codec::Decode;
 use sp_core::Blake2Hasher;
-use sp_trie::CompactProof;
 use sp_trie::trie_types::TrieDBBuilder;
+use sp_trie::CompactProof;
 use trie_db::Trie;
 
 /// Verify a Substrate `/state/2` response against `expected_state_root`
@@ -115,8 +115,7 @@ pub fn child_storage_default_prefix(trie_id: &[u8]) -> Vec<u8> {
 /// `block_hash` + one or more `start` keys. Returns the bytes to feed
 /// into `Connection::request(state_id, …)`.
 pub fn encode_state_request(block_hash: &[u8; 32], start: &[&[u8]]) -> Vec<u8> {
-    let mut out =
-        Vec::with_capacity(8 + 32 + start.iter().map(|s| s.len() + 4).sum::<usize>());
+    let mut out = Vec::with_capacity(8 + 32 + start.iter().map(|s| s.len() + 4).sum::<usize>());
     encode_len_delim(&mut out, 1, block_hash);
     for s in start {
         encode_len_delim(&mut out, 2, s);
@@ -235,7 +234,10 @@ mod tests {
             encode_varint(&mut buf, v);
             let mut slice = &buf[..];
             assert_eq!(decode_varint(&mut slice).unwrap(), v);
-            assert!(slice.is_empty(), "decoder did not consume all bytes for {v}");
+            assert!(
+                slice.is_empty(),
+                "decoder did not consume all bytes for {v}"
+            );
         }
     }
 
@@ -246,7 +248,7 @@ mod tests {
         // field 3 (ignored length-delimited blob).
         let mut bytes = Vec::new();
         // field 1, varint
-        encode_varint(&mut bytes, (1 << 3) | 0);
+        encode_varint(&mut bytes, 1 << 3);
         encode_varint(&mut bytes, 7);
         // field 2, length-delimited: our proof
         encode_varint(&mut bytes, (2 << 3) | 2);
@@ -265,7 +267,7 @@ mod tests {
     fn extract_proof_errors_when_proof_field_missing() {
         // StateResponse with only field 1 — no proof.
         let mut bytes = Vec::new();
-        encode_varint(&mut bytes, (1 << 3) | 0);
+        encode_varint(&mut bytes, 1 << 3);
         encode_varint(&mut bytes, 42);
         let err = extract_state_response_proof(&bytes).unwrap_err();
         assert!(err.contains("no proof field"), "got: {err}");

@@ -1,8 +1,8 @@
-//! Pool-aware request retry. The smoldot-style hot path: pick the best
-//! peer from the pool, run the user-supplied async closure against the
-//! peer's URL, record success/failure on the pool, and fall back to a
-//! hardcoded bootnode URL if the pool is empty/exhausted or its pick
-//! failed.
+//! Pool-aware request retry. The smoldot-style hot path: try available
+//! peers from the pool in reputation order, run the user-supplied async
+//! closure against each peer's URL, record success/failure on the pool,
+//! and fall back to a hardcoded bootnode URL only if the pool is empty
+//! or every available pooled peer failed.
 //!
 //! This is intentionally generic: the closure receives a `&str` URL
 //! and returns any `Result<T, String>`. It can do a one-off state
@@ -25,16 +25,15 @@ use core::future::Future;
 use crate::peer_pool::PeerPool;
 use crate::traits::Clock;
 
-/// Run `request` against the best pooled peer; on failure (or if the
-/// pool is empty), retry once against `bootnode_url` and return that
-/// result regardless of outcome.
+/// Run `request` against available pooled peers from best to worst. On
+/// failure of every available pooled peer (or if the pool is empty),
+/// retry once against `bootnode_url` and return that result regardless
+/// of outcome.
 ///
-/// `request` is invoked at most twice: once with the picked peer's URL
-/// (if any), once with `bootnode_url` if the first call returned `Err`
-/// or no peer could be picked. Success on the first call short-circuits
-/// the fallback. Pool reputation is updated only for the pooled-peer
-/// attempt; the bootnode attempt is not tracked because bootnodes do
-/// not live in the pool.
+/// `request` is invoked at most `available_pool_peers + 1` times.
+/// Success against any pooled peer short-circuits the fallback. Pool
+/// reputation is updated only for pooled-peer attempts; the bootnode
+/// attempt is not tracked because bootnodes do not live in the pool.
 pub async fn run_with_pool_fallback<C, F, Fut, T>(
     pool: &mut PeerPool,
     bootnode_url: &str,
@@ -47,7 +46,7 @@ where
     Fut: Future<Output = Result<T, String>>,
 {
     let now = clock.now_ms();
-    if let Some((picked_id, picked_entry)) = pool.pick_best(now) {
+    for (picked_id, picked_entry) in pool.ranked_available(now) {
         let result = request(&picked_entry.wss_url).await;
         let now2 = clock.now_ms();
         match result {
@@ -57,7 +56,6 @@ where
             }
             Err(_) => {
                 pool.record_failure(&picked_id, now2);
-                // Fall through to the bootnode retry below.
             }
         }
     }
@@ -99,7 +97,10 @@ mod tests {
         .unwrap();
 
         assert_eq!(result, 42);
-        assert_eq!(urls_seen.borrow().as_slice(), &["wss://pool-peer/".to_string()]);
+        assert_eq!(
+            urls_seen.borrow().as_slice(),
+            &["wss://pool-peer/".to_string()]
+        );
         // Reputation bumped, last_seen updated to clock.now_ms() at record time.
         let entry = &pool.peers["P"];
         assert!(entry.failures == 0);
@@ -144,6 +145,48 @@ mod tests {
     }
 
     #[test]
+    fn exhausts_available_pool_peers_before_bootnode_fallback() {
+        let clock = TestClock::new(2_500);
+        let mut pool = PeerPool::new();
+        pool.observe("A".into(), "wss://a/".into(), clock.now_ms());
+        pool.observe("B".into(), "wss://b/".into(), clock.now_ms() + 1);
+        pool.observe("C".into(), "wss://c/".into(), clock.now_ms() + 2);
+        pool.record_success("A", clock.now_ms() + 3);
+        pool.record_success("A", clock.now_ms() + 4);
+        pool.record_success("B", clock.now_ms() + 5);
+
+        let urls_seen = RefCell::new(Vec::<String>::new());
+        let result = block_on(run_with_pool_fallback(
+            &mut pool,
+            "wss://bootnode/",
+            &clock,
+            |url| {
+                let url = url.to_string();
+                let urls_seen = &urls_seen;
+                async move {
+                    urls_seen.borrow_mut().push(url.clone());
+                    if url == "wss://b/" {
+                        Ok::<_, String>(17)
+                    } else {
+                        Err::<u32, _>(format!("{url} failed"))
+                    }
+                }
+            },
+        ))
+        .unwrap();
+
+        assert_eq!(result, 17);
+        assert_eq!(
+            urls_seen.borrow().as_slice(),
+            &["wss://a/".to_string(), "wss://b/".to_string()]
+        );
+        assert_eq!(pool.peers["A"].failures, 1);
+        assert_eq!(pool.peers["B"].failures, 0);
+        assert_eq!(pool.peers["B"].successes, 2);
+        assert_eq!(pool.peers["C"].failures, 0);
+    }
+
+    #[test]
     fn falls_back_to_bootnode_when_pool_is_empty() {
         let clock = TestClock::new(3_000);
         let mut pool = PeerPool::new();
@@ -165,7 +208,10 @@ mod tests {
         .unwrap();
 
         assert_eq!(result, 99);
-        assert_eq!(urls_seen.borrow().as_slice(), &["wss://bootnode/".to_string()]);
+        assert_eq!(
+            urls_seen.borrow().as_slice(),
+            &["wss://bootnode/".to_string()]
+        );
     }
 
     #[test]
@@ -177,9 +223,7 @@ mod tests {
             &mut pool,
             "wss://bootnode/",
             &clock,
-            |_url| async {
-                Err::<u32, _>("everything is on fire".to_string())
-            },
+            |_url| async { Err::<u32, _>("everything is on fire".to_string()) },
         ))
         .unwrap_err();
 

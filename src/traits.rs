@@ -160,10 +160,7 @@ mod tests {
                 Ok(self.0.lock().unwrap().get("state").cloned())
             }
             fn save(&self, data: &[u8]) -> Result<(), Self::Error> {
-                self.0
-                    .lock()
-                    .unwrap()
-                    .insert("state".into(), data.to_vec());
+                self.0.lock().unwrap().insert("state".into(), data.to_vec());
                 Ok(())
             }
         }
