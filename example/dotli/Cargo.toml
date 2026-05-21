@@ -1,0 +1,53 @@
+[package]
+name = "microdot-dotli-example"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+# cdylib for wasm-pack; rlib so cargo test can hit any host-runnable bits.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Path dep into the parent microdot crate. The whole point of this
+# example is to exercise microdot's smoldot-shaped public API — kad,
+# peer_pool, discovery, request, state, plus re-exported warp-sync.
+microdot = { path = "../.." }
+
+# polkadot-p2p-connect provides the per-peer Connection / AsyncRead /
+# AsyncWrite / PlatformT traits we implement against WebSocket.
+polkadot-p2p-connect = { git = "https://github.com/KarimJedda/polkadot-p2p-connect" }
+
+# Wasm runtime + JS glue.
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+# Force the `js` feature on transitively-pulled getrandom so wasm32 builds.
+getrandom = { version = "0.2", features = ["js"] }
+web-sys = { version = "0.3", features = [
+    "WebSocket", "BinaryType", "MessageEvent",
+    "Window", "Crypto", "Document", "Element", "HtmlElement",
+    "HtmlInputElement", "HtmlButtonElement", "Event",
+    "CssStyleDeclaration", "Storage",
+    "Location", "Performance",
+    "console",
+] }
+
+# Crypto / encoding / serialization. Mirrors dotli's surface.
+anyhow = "1"
+parity-scale-codec = { version = "3", features = ["derive"] }
+blake2 = "0.10"
+bs58 = "0.5"
+hex = "0.4"
+hex-literal = "0.4"
+ed25519-dalek = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = { version = "0.1", default-features = false }
+sp-core = { version = "41", default-features = false }
+futures = "0.3"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>microdot · dotli</title>
+  <style>
+    body { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+           background: #0d1117; color: #c9d1d9; padding: 1em;
+           font-size: 13px; line-height: 1.5; max-width: 80em; margin: 0 auto; }
+    h1 { font-size: 1.3em; margin: 0 0 0.5em 0; color: #e6edf3; }
+    .sub { color: #8b949e; margin-bottom: 1em; font-size: 0.95em; }
+    .form { display: flex; gap: 0.5em; margin-bottom: 1em; }
+    .form input { flex: 1; padding: 0.5em 0.75em; background: #0d1117;
+                  color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px;
+                  font-family: inherit; font-size: inherit; }
+    .form input:focus { outline: none; border-color: #58a6ff; }
+    .form button { padding: 0.5em 1.25em; background: #238636; color: #fff;
+                   border: 1px solid #2ea043; border-radius: 6px;
+                   font-family: inherit; font-size: inherit; cursor: pointer; }
+    .form button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .form button:hover:not(:disabled) { background: #2ea043; }
+    pre#log { background: #161b22; padding: 1em; border-radius: 6px;
+              border: 1px solid #30363d; overflow: auto; max-height: 60vh;
+              white-space: pre-wrap; word-break: break-all; min-height: 6em; }
+    #result { margin-top: 1em; padding: 1em; border-radius: 6px;
+              border: 1px solid #30363d; background: #161b22; display: none; }
+    #result.ok { border-color: #238636; }
+    #result.err { border-color: #f85149; }
+    .cid { color: #58a6ff; word-break: break-all; }
+    .muted { color: #8b949e; }
+    a { color: #58a6ff; }
+  </style>
+</head>
+<body>
+  <h1>microdot · dotli</h1>
+  <div class="sub">
+    Trustless <code>&lt;label&gt;.dot</code> &rarr; IPFS CID resolution in the
+    browser, anchored in Paseo Asset Hub Next finality. Same network and trust
+    chain as <span class="muted">paseo-revive-dotli-web-discovery</span>, but
+    driven by <a href="https://github.com/spongebob/microdot">microdot</a>'s
+    public API instead of inline orchestration.
+  </div>
+  <form class="form" id="form" autocomplete="off">
+    <input id="label" type="text" placeholder="label (e.g. host-playground)" />
+    <button id="go" type="submit">resolve</button>
+  </form>
+  <pre id="log"></pre>
+  <div id="result"></div>
+  <script type="module">
+    import init, { resolve } from './pkg/microdot_dotli_example.js';
+
+    const logEl = document.getElementById('log');
+    const goBtn = document.getElementById('go');
+    const inputEl = document.getElementById('label');
+    const resultEl = document.getElementById('result');
+
+    function append(msg) {
+      logEl.textContent += msg + '\n';
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function showResult(html, ok) {
+      resultEl.innerHTML = html;
+      resultEl.className = ok ? 'ok' : 'err';
+      resultEl.style.display = 'block';
+    }
+
+    init()
+      .then(() => append('[ready] microdot wasm bundle loaded; enter a label and hit resolve.'))
+      .catch(err => append('[fatal] ' + err));
+
+    document.getElementById('form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const label = inputEl.value.trim();
+      if (!label) { return; }
+      resultEl.style.display = 'none';
+      logEl.textContent = '';
+      goBtn.disabled = true;
+      append(`[start] resolving "${label}.dot"`);
+      try {
+        const cid = await resolve(label, append);
+        append(`[done] ${cid}`);
+        showResult(`<strong>${label}.dot</strong> &rarr; <span class="cid">${cid}</span>`, true);
+      } catch (err) {
+        append(`[error] ${err}`);
+        showResult(`<strong>${label}.dot</strong> &rarr; <span class="cid">${err}</span>`, false);
+      } finally {
+        goBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
